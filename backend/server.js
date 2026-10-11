@@ -1,12 +1,12 @@
-
-const express = require("express");
+﻿const express = require("express");
 const taskRoutes = require("./routes/taskRoutes");
 const cors = require("cors");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-app.use(cors());
+let server;
 
+app.use(cors());
 app.use(express.json());
 
 // Task management API
@@ -49,17 +49,22 @@ app.use((err, req, res, next) => {
   return next(err);
 });
 
-// Graceful shutdown
+// Start server only when this file is executed directly
 if (require.main === module) {
-  app.listen(PORT, "0.0.0.0", () => {
+  server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`ContainerHub server running on port ${PORT}`);
   });
 }
 
 module.exports = app;
 
+// Graceful shutdown
 process.on("SIGTERM", () => {
   console.log("SIGTERM received. Shutting down server.");
+
+  if (!server) {
+    return;
+  }
 
   server.close(() => {
     console.log("ContainerHub server stopped.");

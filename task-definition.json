@@ -1,0 +1,155 @@
+
+{
+  "family": "containerhub-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "1024",
+  "memory": "3072",
+  "executionRoleArn": "arn:aws:iam::765578794339:role/ecsTaskExecutionRole",
+  "runtimePlatform": {
+    "operatingSystemFamily": "LINUX",
+    "cpuArchitecture": "X86_64"
+  },
+  "containerDefinitions": [
+    {
+      "name": "database",
+      "image": "765578794339.dkr.ecr.ap-south-1.amazonaws.com/containerhub-database:17-alpine-2",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 5432,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "POSTGRES_DB",
+          "value": "containerhub"
+        },
+        {
+          "name": "POSTGRES_USER",
+          "value": "containerhub_user"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "POSTGRES_PASSWORD",
+          "valueFrom": "arn:aws:ssm:ap-south-1:765578794339:parameter/containerhub/db-password"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "pg_isready -U containerhub_user -d containerhub || exit 1"
+        ],
+        "interval": 10,
+        "timeout": 5,
+        "retries": 5,
+        "startPeriod": 30
+      },
+      "mountPoints": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/containerhub",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "database"
+        }
+      }
+    },
+    {
+      "name": "backend",
+      "image": "765578794339.dkr.ecr.ap-south-1.amazonaws.com/containerhub-backend:1.0.2",
+      "essential": true,
+      "dependsOn": [
+        {
+          "containerName": "database",
+          "condition": "HEALTHY"
+        }
+      ],
+      "portMappings": [
+        {
+          "containerPort": 3000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "NODE_ENV",
+          "value": "production"
+        },
+        {
+          "name": "PORT",
+          "value": "3000"
+        },
+        {
+          "name": "DB_HOST",
+          "value": "localhost"
+        },
+        {
+          "name": "DB_PORT",
+          "value": "5432"
+        },
+        {
+          "name": "DB_NAME",
+          "value": "containerhub"
+        },
+        {
+          "name": "DB_USER",
+          "value": "containerhub_user"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "DB_PASSWORD",
+          "valueFrom": "arn:aws:ssm:ap-south-1:765578794339:parameter/containerhub/db-password"
+        }
+      ],
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "node -e \"require('http').get('http://localhost:3000/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/containerhub",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "backend"
+        }
+      }
+    },
+    {
+      "name": "frontend",
+      "image": "765578794339.dkr.ecr.ap-south-1.amazonaws.com/containerhub-frontend:1.0.3",
+      "essential": true,
+      "dependsOn": [
+        {
+          "containerName": "backend",
+          "condition": "HEALTHY"
+        }
+      ],
+      "portMappings": [
+        {
+          "containerPort": 80,
+          "protocol": "tcp"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/containerhub",
+          "awslogs-region": "ap-south-1",
+          "awslogs-stream-prefix": "frontend"
+        }
+      }
+    }
+  ]
+}
